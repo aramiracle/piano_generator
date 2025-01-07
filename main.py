@@ -4,7 +4,7 @@ from model import TransformerModel
 from train import train_model
 from dataset import get_dataloader
 from generate import generate_sequence
-from utils import load_vocab_size
+from utils import load_vocab_size, create_midi_from_events
 
 def main():
     # Load preprocessed data first to get vocabulary size
@@ -14,12 +14,12 @@ def main():
     # Hyperparameters
     EMBED_SIZE = 256
     NUM_HEADS = 4
-    NUM_LAYERS = 8
+    NUM_LAYERS = 2
     FF_DIM = 1024
     MAX_LEN = 512  # Match with preprocessing max_events
     DROPOUT = 0.1
     EPOCHS = 10
-    BATCH_SIZE = 16
+    BATCH_SIZE = 32
     LEARNING_RATE = 1e-4
 
     # Device
@@ -46,6 +46,10 @@ def main():
     # Convert generated indices back to events
     generated_events = [reverse_vocab[idx] for idx in generated_seq]
     print("Generated Sequence:", generated_events)
+
+    # Create MIDI from generated events
+    midi_path = "generated_sequence.mid"
+    create_midi_from_events(generated_events, output_path=midi_path)
 
 if __name__ == "__main__":
     main()

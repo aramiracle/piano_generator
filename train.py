@@ -1,9 +1,14 @@
+import os
 import torch
 from utils import generate_square_subsequent_mask
 from tqdm import tqdm
 
 def train_model(model, dataloader, optimizer, criterion, device, epochs=10):
     model.train()
+    
+    # Ensure checkpoints directory exists
+    checkpoints_dir = "checkpoints"
+    os.makedirs(checkpoints_dir, exist_ok=True)
     
     for epoch in range(epochs):
         epoch_loss = 0
@@ -60,10 +65,12 @@ def train_model(model, dataloader, optimizer, criterion, device, epochs=10):
         avg_loss = epoch_loss / len(dataloader)
         print(f"Epoch {epoch + 1}/{epochs}, Average Loss: {avg_loss:.4f}")
         
-        # Optional: Save checkpoint
+        # Save checkpoint in the checkpoints directory
+        checkpoint_path = os.path.join(checkpoints_dir, f'checkpoint_epoch_{epoch+1}.pt')
         torch.save({
-            'epoch': epoch,
+            'epoch': epoch + 1,
             'model_state_dict': model.state_dict(),
             'optimizer_state_dict': optimizer.state_dict(),
             'loss': avg_loss,
-        }, f'checkpoint_epoch_{epoch+1}.pt')
+        }, checkpoint_path)
+        print(f"Checkpoint saved at {checkpoint_path}")
