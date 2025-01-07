@@ -1,26 +1,69 @@
+import torch
 from utils import generate_square_subsequent_mask
+from tqdm import tqdm
 
 def train_model(model, dataloader, optimizer, criterion, device, epochs=10):
     model.train()
+    
     for epoch in range(epochs):
         epoch_loss = 0
-        for src, tgt in dataloader:
-            src, tgt = src.to(device), tgt.to(device)
+        progress_bar = tqdm(dataloader, desc=f'Epoch {epoch+1}/{epochs}')
+        
+        for batch_idx, (src, tgt) in enumerate(progress_bar):
+            # Input validation
+            if torch.max(src) >= model.embedding.num_embeddings or torch.min(src) < 0:
+                print(f"Invalid src indices found in batch {batch_idx}")
+                print(f"Max src value: {torch.max(src).item()}")
+                print(f"Min src value: {torch.min(src).item()}")
+                print(f"Vocab size: {model.embedding.num_embeddings}")
+                continue
+            
+            # Move data to device
+            src = src.to(device)
+            tgt = tgt.to(device)
+            
+            # Prepare target input and output
             tgt_input = tgt[:, :-1]
             tgt_output = tgt[:, 1:]
             
-            src_mask = generate_square_subsequent_mask(src.size(1)).to(device)
-            tgt_mask = generate_square_subsequent_mask(tgt_input.size(1)).to(device)
+            # Generate masks
+            src_mask = generate_square_subsequent_mask(src.size(1), device)
+            tgt_mask = generate_square_subsequent_mask(tgt_input.size(1), device)
+            
+            # Clear gradients
+            optimizer.zero_grad(set_to_none=True)
 
-            optimizer.zero_grad()
+            # Forward pass
             output = model(src, tgt_input, src_mask, tgt_mask)
-            output = output.reshape(-1, output.shape[-1])
-            tgt_output = tgt_output.reshape(-1)
-
+            output = output.contiguous().view(-1, output.size(-1))
+            tgt_output = tgt_output.contiguous().view(-1)
+            
+            # Calculate loss
             loss = criterion(output, tgt_output)
+            
+            # Backward pass
             loss.backward()
+            
+            # Gradient clipping
+            torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
+            
+            # Optimizer step
             optimizer.step()
+            
+            # Update metrics
+            loss_item = loss.item()
+            epoch_loss += loss_item
+            
+            # Update progress bar
+            progress_bar.set_postfix({'loss': f'{loss_item:.4f}'})
 
-            epoch_loss += loss.item()
-
-        print(f"Epoch {epoch + 1}/{epochs}, Loss: {epoch_loss / len(dataloader):.4f}")
+        avg_loss = epoch_loss / len(dataloader)
+        print(f"Epoch {epoch + 1}/{epochs}, Average Loss: {avg_loss:.4f}")
+        
+        # Optional: Save checkpoint
+        torch.save({
+            'epoch': epoch,
+            'model_state_dict': model.state_dict(),
+            'optimizer_state_dict': optimizer.state_dict(),
+            'loss': avg_loss,
+        }, f'checkpoint_epoch_{epoch+1}.pt')

@@ -27,6 +27,7 @@ class TransformerModel(nn.Module):
             num_decoder_layers=num_layers,
             dim_feedforward=ff_dim,
             dropout=dropout,
+            batch_first=True
         )
         self.fc_out = nn.Linear(embed_size, vocab_size)
         self.embed_size = embed_size
