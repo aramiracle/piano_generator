@@ -4,44 +4,50 @@ from model import TransformerModel
 from train import train_model
 from dataset import get_dataloader
 from generate import generate_sequence
-from utils import load_vocab_size, create_midi_from_events
+from utils import load_vocab_size, create_midi_from_events, load_latest_checkpoint, test_model
 
 def main():
     # Load preprocessed data first to get vocabulary size
-    SEQUENCES_PATH = "dataset/preprocessed/maestro_sequences.pkl"
+    SEQUENCES_PATH = "dataset/preprocessed/maestro_paired_sequences.pkl"
     VOCAB_SIZE = load_vocab_size(SEQUENCES_PATH)
     
-    # Hyperparameters
-    EMBED_SIZE = 256
+    # Updated Hyperparameters
+    EMBED_SIZE = 128
     NUM_HEADS = 4
-    NUM_LAYERS = 2
+    NUM_LAYERS = 3
     FF_DIM = 1024
-    MAX_LEN = 512  # Match with preprocessing max_events
+    MAX_LEN = 512  # Adjusted based on typical sequence lengths
     DROPOUT = 0.1
-    EPOCHS = 10
-    BATCH_SIZE = 32
-    LEARNING_RATE = 1e-4
+    EPOCHS = 200  # Increased for potentially better convergence
+    BATCH_SIZE = 32  # Reduced if memory is a concern
+    START_SEQ_SIZE = 5
+    MAX_GEN_LEN = 10
+    LEARNING_RATE = 3e-4  # Adjusted for quicker optimization with AdamW
 
     # Device
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Using device: {device}")
 
     # Load Preprocessed Data
-    dataloader, vocab, reverse_vocab = get_dataloader(SEQUENCES_PATH, batch_size=BATCH_SIZE)
+    dataloader, _, reverse_vocab = get_dataloader(SEQUENCES_PATH, batch_size=BATCH_SIZE)
     print(f"Vocabulary size: {VOCAB_SIZE}")
 
     # Initialize Model
     model = TransformerModel(VOCAB_SIZE, EMBED_SIZE, NUM_HEADS, NUM_LAYERS, FF_DIM, MAX_LEN, DROPOUT).to(device)
     optimizer = torch.optim.AdamW(model.parameters(), lr=LEARNING_RATE)
-    criterion = nn.CrossEntropyLoss(ignore_index=vocab['pad'])  # Ignore padding tokens
+    criterion = nn.CrossEntropyLoss()
 
-    # Train Model
-    train_model(model, dataloader, optimizer, criterion, device, epochs=EPOCHS)
+    # Load model from the latest checkpoint if available
+    model, optimizer, start_epoch, _ = load_latest_checkpoint(model, optimizer)
 
+    # Train Model (start from the next epoch)
+    train_model(model, dataloader, optimizer, criterion, device, epochs=EPOCHS, start_epoch=start_epoch)
+
+    # Testing model
+    test_model(model, dataloader, reverse_vocab, device)
+    
     # Generate Sequence
-    start_tokens = ["note_on_60"]  # Start with middle C
-    start_seq = [vocab[token] for token in start_tokens]
-    generated_seq = generate_sequence(model, start_seq, max_length=100, vocab_size=VOCAB_SIZE, device=device)
+    generated_seq = generate_sequence(model, START_SEQ_SIZE, MAX_GEN_LEN, VOCAB_SIZE, device)
     
     # Convert generated indices back to events
     generated_events = [reverse_vocab[idx] for idx in generated_seq]
@@ -53,3 +59,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+

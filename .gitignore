@@ -1,3 +1,5 @@
 __pycache__
 dataset
 checkpoints
+.vscode
+generated_sequence.mid
