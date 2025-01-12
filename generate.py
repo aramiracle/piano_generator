@@ -1,46 +1,37 @@
 import torch
-import random
-from utils import generate_square_subsequent_mask
 
-def generate_sequence(model, start_seq_size, max_length, vocab_size, device):
+def generate_sequence_from_batch(model, dataloader, gen_seq_len, vocab_size, device):
     model.eval()
 
-    # Generate a random starting sequence as one-hot encoded tokens
-    start_seq = [random.randint(0, vocab_size - 1) for _ in range(start_seq_size)]
-    
-    # Convert to one-hot encoding (shape: (seq_length, vocab_size))
-    one_hot_start_seq = torch.zeros(start_seq_size, vocab_size, device=device)
-    for idx, token in enumerate(start_seq):
-        one_hot_start_seq[idx, token] = 1
+    # Extract the first batch from the dataloader
+    inputs, targets = next(iter(dataloader))
+    inputs, targets = inputs.to(device), targets.to(device)
 
-    generated = start_seq
-    for _ in range(max_length):
-        # Prepare src (input sequence) and tgt (target sequence shifted by one)
-        src = one_hot_start_seq.unsqueeze(0)  # Add batch dimension (shape: (1, seq_length, vocab_size))
-        src_mask = generate_square_subsequent_mask(src.size(1), device).to(device)  # Create mask
-        
-        # tgt is the same as src but with the generated sequence
-        tgt = torch.zeros_like(src, device=device)
-        tgt[:, :-1, :] = src[:, 1:, :]  # Shift by one for the target sequence
+    # Use the first sequence in the batch
+    current_src = inputs[0]  # Shape: (seq_len, vocab_size)
+    current_tgt = targets[0]
+    generated = torch.argmax(current_src, dim=-1).tolist()  # Convert initial sequence to indices
 
-        tgt_mask = generate_square_subsequent_mask(tgt.size(1), device).to(device)  # Create mask
-        
+    seq_len = len(generated)
+
+    for _ in range(gen_seq_len):  # Generate additional notes
+        # Prepare src (input sequence)
+        src = current_src.unsqueeze(0)  # Add batch dimension (shape: (1, seq_len, vocab_size))
+        tgt = current_tgt[:-1, :].unsqueeze(0)
+
         with torch.no_grad():
-            output = model(src, tgt, src_mask, tgt_mask)  # Forward pass with different src and tgt
-        
-        # Get the most probable next token from the model's output (shape: [1, seq_length, vocab_size])
-        next_token = torch.argmax(output[:, -1, :], dim=-1).item()  # Get the index of the most probable token
-        
-        # Append the predicted token index to the sequence
+            output = model(src, tgt)  # Predict the next token
+
+        # Get the most probable next token
+        next_token = torch.argmax(output[:, -1, :], dim=-1).item()
         generated.append(next_token)
 
-        # Convert the predicted token to a one-hot vector and append it to the sequence for the next iteration
+        # Convert the predicted token to one-hot encoding
         next_one_hot = torch.zeros(1, vocab_size, device=device)
         next_one_hot[0, next_token] = 1
-        one_hot_start_seq = torch.cat([one_hot_start_seq, next_one_hot], dim=0)  # Update input sequence
 
-        # Check for end-of-sequence token
-        if next_token == vocab_size - 1:  # End-of-sequence token
-            break
-    
-    return generated
+        # Concatenate the new token and slide the sequence window
+        current_src = torch.cat([current_src, next_one_hot], dim=0)[-seq_len:, :]
+        current_tgt = torch.cat([current_tgt, next_one_hot], dim=0)[-seq_len:, :]
+
+    return generated[seq_len:]

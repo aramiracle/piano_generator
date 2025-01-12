@@ -23,7 +23,7 @@ def create_midi_from_events(events, output_path="output.mid"):
             pass
         elif event.startswith("time_shift_"):
             # Adjust current time by the specified amount
-            time_shift = float(event.split("_")[2]) / 100  # Assuming time_shift is in 100ms units
+            time_shift = float(event.split("_")[2]) / 1000  # Assuming time_shift is in 1 second units
             current_time += time_shift
 
     # Add the piano instrument to the PrettyMIDI object
@@ -77,36 +77,3 @@ def load_latest_checkpoint(model, optimizer, checkpoint_dir="checkpoints"):
     
     print(f"Loaded checkpoint from epoch {epoch}, loss {loss:.4f}")
     return model, optimizer, epoch, loss
-
-def test_model(model, dataloader, reverse_vocab, device):
-    model.eval()  # Set the model to evaluation mode
-    with torch.no_grad():  # No gradients needed during inference
-        # Loop through the batches in the dataloader
-        for inputs, targets in dataloader:
-            inputs, targets = inputs.to(device), targets.to(device)
-
-            # Forward pass through the model
-            output = model(
-                src=inputs,
-                tgt=targets[:, :-1],  # Input to the model is the target sequence excluding the last token
-                src_mask=None,  # Assuming no source mask is needed (or you can pass generate_square_subsequent_mask if required)
-                tgt_mask=None,  # Assuming no target mask is needed (or you can pass generate_square_subsequent_mask if required)
-                src_key_padding_mask=None,  # Assuming no padding mask (or pass one if needed)
-                tgt_key_padding_mask=None,  # Assuming no padding mask (or pass one if needed)
-            )  # Output shape: (batch_size, seq_len, vocab_size)
-
-            # Get the predicted token indices (last token for each batch)
-            predicted_note_idx = output[:, -1, :].argmax(dim=-1)  # Shape: (batch_size,) 
-
-            # Get the real token (last token in the target sequence)
-            real_note_idx = targets[:, -1, :].argmax(dim=-1)  # Shape: (batch_size,)
-
-            # Loop over each example in the batch
-            for i in range(inputs.size(0)):
-                # Assuming reverse_vocab maps indices to notes
-                predicted_note = reverse_vocab[predicted_note_idx[i].item()]  # Convert predicted index to note
-                real_note = reverse_vocab[real_note_idx[i].item()]  # Convert real index to note
-
-                # Output the predicted and real notes for this example
-                print(f"Predicted note: {predicted_note}")
-                print(f"Real note: {real_note}")

@@ -118,7 +118,7 @@ def main():
     OUTPUT_PATH = "dataset/preprocessed"
     
     # Set maximum number of events per sequence and optionally limit number of files
-    MAX_EVENTS = 512  # Adjust this value based on your needs
+    MAX_EVENTS = 768  # Adjust this value based on your needs
     MAX_FILES = None  # Set to an integer to limit the number of files processed
     
     preprocess_dataset(DATASET_PATH, OUTPUT_PATH, max_events=MAX_EVENTS, max_files=MAX_FILES)

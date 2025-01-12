@@ -1,10 +1,11 @@
+import os
 import torch
 import torch.nn as nn
 from model import TransformerModel
 from train import train_model
 from dataset import get_dataloader
-from generate import generate_sequence
-from utils import load_vocab_size, create_midi_from_events, load_latest_checkpoint, test_model
+from generate import generate_sequence_from_batch
+from utils import load_vocab_size, create_midi_from_events, load_latest_checkpoint
 
 def main():
     # Load preprocessed data first to get vocabulary size
@@ -12,17 +13,18 @@ def main():
     VOCAB_SIZE = load_vocab_size(SEQUENCES_PATH)
     
     # Updated Hyperparameters
-    EMBED_SIZE = 128
+    EMBED_SIZE = 256
     NUM_HEADS = 4
-    NUM_LAYERS = 3
+    NUM_LAYERS = 2
     FF_DIM = 1024
-    MAX_LEN = 512  # Adjusted based on typical sequence lengths
+    MAX_LEN = 768  # Adjusted based on typical sequence lengths
     DROPOUT = 0.1
-    EPOCHS = 200  # Increased for potentially better convergence
+    EPOCHS = 100  # Increased for potentially better convergence
     BATCH_SIZE = 32  # Reduced if memory is a concern
-    START_SEQ_SIZE = 5
-    MAX_GEN_LEN = 10
+    GEN_SEQ_LEN = 300
     LEARNING_RATE = 3e-4  # Adjusted for quicker optimization with AdamW
+    OUTPUT_FILENAME = "generated_song.mid"
+    CHECKPOINT_DIR = "checkpoints"
 
     # Device
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -38,24 +40,31 @@ def main():
     criterion = nn.CrossEntropyLoss()
 
     # Load model from the latest checkpoint if available
-    model, optimizer, start_epoch, _ = load_latest_checkpoint(model, optimizer)
+    os.makedirs(CHECKPOINT_DIR, exist_ok=True)
+    model, optimizer, start_epoch, _ = load_latest_checkpoint(model, optimizer, checkpoint_dir=CHECKPOINT_DIR)
 
     # Train Model (start from the next epoch)
     train_model(model, dataloader, optimizer, criterion, device, epochs=EPOCHS, start_epoch=start_epoch)
 
     # Testing model
-    test_model(model, dataloader, reverse_vocab, device)
+    # test_model(model, dataloader, reverse_vocab, device)
     
     # Generate Sequence
-    generated_seq = generate_sequence(model, START_SEQ_SIZE, MAX_GEN_LEN, VOCAB_SIZE, device)
-    
+    # generated_seq = generate_sequence(model, START_SEQ_SIZE, MAX_GEN_LEN, VOCAB_SIZE, device)
+    generated_sequence = generate_sequence_from_batch(
+        model=model,
+        dataloader=dataloader,
+        gen_seq_len=GEN_SEQ_LEN,
+        vocab_size=VOCAB_SIZE,
+        device=device,
+    )
+    print(len(generated_sequence))
     # Convert generated indices back to events
-    generated_events = [reverse_vocab[idx] for idx in generated_seq]
+    generated_events = [reverse_vocab[idx] for idx in generated_sequence]
     print("Generated Sequence:", generated_events)
 
     # Create MIDI from generated events
-    midi_path = "generated_sequence.mid"
-    create_midi_from_events(generated_events, output_path=midi_path)
+    create_midi_from_events(generated_events, output_path=OUTPUT_FILENAME)
 
 if __name__ == "__main__":
     main()
