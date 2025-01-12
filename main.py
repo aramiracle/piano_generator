@@ -19,9 +19,9 @@ def main():
     FF_DIM = 1024
     MAX_LEN = 768  # Adjusted based on typical sequence lengths
     DROPOUT = 0.2
-    EPOCHS = 300  # Increased for potentially better convergence
+    EPOCHS = 100  # Increased for potentially better convergence
     BATCH_SIZE = 64  # Reduced if memory is a concern
-    GEN_SEQ_LEN = 300
+    GEN_SEQ_LEN = 1000
     LABEL_SMOOTHING = 0.3
     LEARNING_RATE = 3e-4  # Adjusted for quicker optimization with AdamW
     OUTPUT_FILENAME = "generated_song.mid"
