@@ -15,13 +15,14 @@ def main():
     # Updated Hyperparameters
     EMBED_SIZE = 256
     NUM_HEADS = 4
-    NUM_LAYERS = 2
+    NUM_LAYERS = 4
     FF_DIM = 1024
     MAX_LEN = 768  # Adjusted based on typical sequence lengths
-    DROPOUT = 0.1
-    EPOCHS = 100  # Increased for potentially better convergence
-    BATCH_SIZE = 32  # Reduced if memory is a concern
+    DROPOUT = 0.2
+    EPOCHS = 300  # Increased for potentially better convergence
+    BATCH_SIZE = 64  # Reduced if memory is a concern
     GEN_SEQ_LEN = 300
+    LABEL_SMOOTHING = 0.3
     LEARNING_RATE = 3e-4  # Adjusted for quicker optimization with AdamW
     OUTPUT_FILENAME = "generated_song.mid"
     CHECKPOINT_DIR = "checkpoints"
@@ -37,7 +38,7 @@ def main():
     # Initialize Model
     model = TransformerModel(VOCAB_SIZE, EMBED_SIZE, NUM_HEADS, NUM_LAYERS, FF_DIM, MAX_LEN, DROPOUT).to(device)
     optimizer = torch.optim.AdamW(model.parameters(), lr=LEARNING_RATE)
-    criterion = nn.CrossEntropyLoss()
+    criterion = nn.CrossEntropyLoss(label_smoothing=LABEL_SMOOTHING)
 
     # Load model from the latest checkpoint if available
     os.makedirs(CHECKPOINT_DIR, exist_ok=True)
@@ -45,12 +46,8 @@ def main():
 
     # Train Model (start from the next epoch)
     train_model(model, dataloader, optimizer, criterion, device, epochs=EPOCHS, start_epoch=start_epoch)
-
-    # Testing model
-    # test_model(model, dataloader, reverse_vocab, device)
     
     # Generate Sequence
-    # generated_seq = generate_sequence(model, START_SEQ_SIZE, MAX_GEN_LEN, VOCAB_SIZE, device)
     generated_sequence = generate_sequence_from_batch(
         model=model,
         dataloader=dataloader,
@@ -58,7 +55,7 @@ def main():
         vocab_size=VOCAB_SIZE,
         device=device,
     )
-    print(len(generated_sequence))
+
     # Convert generated indices back to events
     generated_events = [reverse_vocab[idx] for idx in generated_sequence]
     print("Generated Sequence:", generated_events)

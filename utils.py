@@ -5,26 +5,53 @@ import pretty_midi
 
 def create_midi_from_events(events, output_path="output.mid"):
     # Create a PrettyMIDI object
-    midi = pretty_midi.PrettyMIDI()
+    midi = pretty_midi.PrettyMIDI(initial_tempo=120)  # Set standard tempo of 120 BPM
     piano_program = pretty_midi.instrument_name_to_program("Acoustic Grand Piano")
     piano = pretty_midi.Instrument(program=piano_program)
 
-    # Parse events and create notes
+    # Constants for timing
+    BEAT_LENGTH = 0.5  # Length of a quarter note in seconds at 120 BPM
     current_time = 0
+    active_notes = {}  # Dictionary to keep track of active notes
+
     for event in events:
         if event.startswith("note_on_"):
-            # Extract pitch and set velocity
             pitch = int(event.split("_")[2])
-            velocity = 100  # Set a fixed velocity
-            note = pretty_midi.Note(velocity=velocity, pitch=pitch, start=current_time, end=current_time + 0.5)
-            piano.notes.append(note)
+            velocity = 64  # Medium velocity for more natural sound
+            active_notes[pitch] = {
+                'start': current_time,
+                'velocity': velocity
+            }
+            
         elif event.startswith("note_off_"):
-            # In pretty_midi, note-offs are not explicitly needed; duration is handled by `end`.
-            pass
+            pitch = int(event.split("_")[2])
+            if pitch in active_notes:
+                # Create note with actual duration
+                note = pretty_midi.Note(
+                    velocity=active_notes[pitch]['velocity'],
+                    pitch=pitch,
+                    start=active_notes[pitch]['start'],
+                    end=current_time
+                )
+                piano.notes.append(note)
+                del active_notes[pitch]
+                
         elif event.startswith("time_shift_"):
-            # Adjust current time by the specified amount
-            time_shift = float(event.split("_")[2]) / 1000  # Assuming time_shift is in 1 second units
+            duration = int(event.split("_")[2])
+            # Convert duration to musical time
+            # duration 480 = quarter note, 240 = eighth note, etc.
+            time_shift = (duration / 480) * BEAT_LENGTH
             current_time += time_shift
+
+    # Handle any notes that haven't received a note_off event
+    for pitch, note_data in active_notes.items():
+        note = pretty_midi.Note(
+            velocity=note_data['velocity'],
+            pitch=pitch,
+            start=note_data['start'],
+            end=current_time
+        )
+        piano.notes.append(note)
 
     # Add the piano instrument to the PrettyMIDI object
     midi.instruments.append(piano)
