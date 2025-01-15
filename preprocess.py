@@ -7,7 +7,7 @@ import pickle
 def midi_to_event_sequence(midi_path, max_events=512, min_note=21, max_note=108):
     """
     Converts a MIDI file into a sequence of events with reduced vocabulary size:
-    - Limits note range (default: piano range from A0 to C8)
+    - Maps out-of-range notes to closest valid notes
     - More aggressive time quantization (25ms steps)
     - Combines note-on/off into single events
     """
@@ -17,9 +17,8 @@ def midi_to_event_sequence(midi_path, max_events=512, min_note=21, max_note=108)
 
     # Process notes into events
     for note in sorted(midi_data.instruments[0].notes, key=lambda n: n.start):
-        # Skip notes outside the specified range
-        if note.pitch < min_note or note.pitch > max_note:
-            continue
+        # Map out-of-range notes to closest valid notes
+        mapped_pitch = min(max_note, max(min_note, note.pitch))
 
         # Add time-shift events
         time_shift = int((note.start - prev_time) * 1000)  # Convert to milliseconds
@@ -30,7 +29,7 @@ def midi_to_event_sequence(midi_path, max_events=512, min_note=21, max_note=108)
         prev_time = note.start
 
         # Simplified note events (normalized to C4 = 60)
-        relative_pitch = note.pitch - min_note
+        relative_pitch = mapped_pitch - min_note
         events.append(f"note_{relative_pitch}")
 
         # Truncate if sequence gets too long
