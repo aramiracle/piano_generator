@@ -3,9 +3,15 @@ import torch
 import pickle
 import pretty_midi
 
-def create_midi_from_events(events, output_path="output.mid"):
-    # Create a PrettyMIDI object
-    midi = pretty_midi.PrettyMIDI(initial_tempo=120)  # Set standard tempo of 120 BPM
+def create_midi_from_events(events, output_path="output.mid", tempo=120):
+    """
+    Convert a sequence of MIDI events to a MIDI file.
+    
+    :param events: List of MIDI events (e.g., note_on, note_off, time_shift, tempo changes).
+    :param output_path: Path to save the generated MIDI file.
+    :param tempo: The tempo to apply to the MIDI file (in BPM).
+    """
+    midi = pretty_midi.PrettyMIDI(initial_tempo=tempo)  # Set tempo
     piano_program = pretty_midi.instrument_name_to_program("Acoustic Grand Piano")
     piano = pretty_midi.Instrument(program=piano_program)
 
@@ -42,6 +48,11 @@ def create_midi_from_events(events, output_path="output.mid"):
             # duration 480 = quarter note, 240 = eighth note, etc.
             time_shift = (duration / 480) * BEAT_LENGTH
             current_time += time_shift
+
+        elif event.startswith("tempo_"):
+            # Adjust tempo based on the event (e.g., "tempo_100" for 100 BPM)
+            tempo = int(event.split("_")[1])
+            midi.get_end_time()  # Force tempo adjustment, even if not explicitly used
 
     # Handle any notes that haven't received a note_off event
     for pitch, note_data in active_notes.items():

@@ -37,29 +37,35 @@ def generate_sequence_from_batch(model, dataloader, gen_seq_len, vocab_size, dev
         event_type = reverse_vocab[next_token]
         
         if event_type.startswith("note_"):
-            # Handle note events
-            current_pitch = int(event_type.split("_")[1])
-            
-            if last_note_value is None:
-                # First note - use as reference
-                last_note_value = current_pitch
-                event = f"note_on_{current_pitch}"
-            else:
-                # Maintain relative pitch movement
-                pitch_diff = current_pitch - last_note_value
-                current_pitch = (last_note_value + pitch_diff) % 128  # Wrap around within MIDI pitch range
-                last_note_value = current_pitch
-                event = f"note_on_{current_pitch}"
+            if event_type.startswith("note_on_"):
+                # Handle "note_on" event
+                if len(event_type.split("_")) > 2:
+                    current_pitch = int(event_type.split("_")[2])
+                else:
+                    # If there's no pitch value (just "note_on_"), skip to next token
+                    continue
                 
-            # Store the active note to generate "note_off" later
-            active_notes[current_pitch] = event
-        
-        elif event_type.startswith("note_off_"):
-            # Handle "note_off" event for ending the note
-            pitch = int(event_type.split("_")[2])
-            if pitch in active_notes:
-                event = f"note_off_{pitch}"
-                del active_notes[pitch]  # Remove from active notes after it's turned off
+                if last_note_value is None:
+                    # First note - use as reference
+                    last_note_value = current_pitch
+                    event = f"note_on_{current_pitch}"
+                else:
+                    # Maintain relative pitch movement
+                    pitch_diff = current_pitch - last_note_value
+                    current_pitch = (last_note_value + pitch_diff) % 128  # Wrap around within MIDI pitch range
+                    last_note_value = current_pitch
+                    event = f"note_on_{current_pitch}"
+                
+                # Store the active note to generate "note_off" later
+                active_notes[current_pitch] = event
+
+            elif event_type.startswith("note_off_"):
+                # Handle "note_off" event for ending the note
+                if len(event_type.split("_")) > 2:
+                    pitch = int(event_type.split("_")[2])
+                    if pitch in active_notes:
+                        event = f"note_off_{pitch}"
+                        del active_notes[pitch]  # Remove from active notes after it's turned off
         
         elif event_type.startswith("time_"):
             # Handle time shift or tempo change

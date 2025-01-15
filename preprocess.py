@@ -4,33 +4,36 @@ from pathlib import Path
 from tqdm import tqdm
 import pickle
 
-def midi_to_event_sequence(midi_path, max_events=512, min_note=21, max_note=108):
+def midi_to_event_sequence(midi_path, max_events=512, min_note=21, max_note=108, quantized_shift_gap=50):
     """
-    Converts a MIDI file into a sequence of events with reduced vocabulary size:
-    - Maps out-of-range notes to closest valid notes
-    - More aggressive time quantization (25ms steps)
-    - Combines note-on/off into single events
+    Converts a MIDI file into a sequence of events with reduced vocabulary size.
+    Handles note-on/note-off events and incorporates time differences as integers.
     """
     midi_data = pretty_midi.PrettyMIDI(str(midi_path))
     events = []
     prev_time = 0
+    active_notes = set()  # Tracks currently active notes for "note_off" events
 
     # Process notes into events
     for note in sorted(midi_data.instruments[0].notes, key=lambda n: n.start):
-        # Map out-of-range notes to closest valid notes
+        # Ensure valid note pitch is within the specified range
         mapped_pitch = min(max_note, max(min_note, note.pitch))
 
-        # Add time-shift events
-        time_shift = int((note.start - prev_time) * 1000)  # Convert to milliseconds
+        # Add time-shift events in terms of integer time difference (milliseconds)
+        time_shift = int((note.start - prev_time) * 1000)  # Convert time shift to milliseconds (integer)
         if time_shift > 0:
-            # More aggressive quantization (25ms steps)
-            quantized_shift = min(1000, max(25, time_shift // 25 * 25))
-            events.append(f"time_{quantized_shift}")
+            # Quantizing time shift to 25ms steps (integer)
+            quantized_shift = (time_shift // quantized_shift_gap) * quantized_shift_gap
+            events.append(f"time_shift_{quantized_shift}")
         prev_time = note.start
 
-        # Simplified note events (normalized to C4 = 60)
+        # Add note-on event (start of the note)
         relative_pitch = mapped_pitch - min_note
-        events.append(f"note_{relative_pitch}")
+        events.append(f"note_on_{relative_pitch}")
+        active_notes.add(relative_pitch)  # Mark the note as active
+        
+        # Add note-off event (end of the note)
+        events.append(f"note_off_{relative_pitch}")
 
         # Truncate if sequence gets too long
         if len(events) >= max_events:
@@ -61,7 +64,7 @@ def events_to_indices(events, vocab):
 
 def preprocess_dataset(dataset_path, output_path, max_events=512, max_files=None):
     """
-    Preprocesses the Maestro dataset with reduced vocabulary size.
+    Preprocesses the Maestro dataset with reduced vocabulary size and handles note-on/off and time shift events.
     """
     dataset_path = Path(dataset_path)
     output_path = Path(output_path)
@@ -80,9 +83,12 @@ def preprocess_dataset(dataset_path, output_path, max_events=512, max_files=None
             # Simple transformation for target sequence (shift up by 1)
             tgt_events = []
             for event in src_events:
-                if event.startswith("note_"):
-                    pitch = int(event.split("_")[1])
-                    tgt_events.append(f"note_{(pitch + 1) % 88}")  # Wrap around within range
+                if event.startswith("note_on_"):
+                    pitch = int(event.split("_")[2])
+                    tgt_events.append(f"note_on_{(pitch + 1) % 88}")  # Wrap around within range
+                elif event.startswith("note_off_"):
+                    pitch = int(event.split("_")[2])
+                    tgt_events.append(f"note_off_{(pitch + 1) % 88}")  # Wrap around within range
                 else:
                     tgt_events.append(event)
 
