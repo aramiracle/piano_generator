@@ -54,6 +54,7 @@ def main():
         gen_seq_len=GEN_SEQ_LEN,
         vocab_size=VOCAB_SIZE,
         device=device,
+        reverse_vocab=reverse_vocab
     )
 
     # Convert generated indices back to events
