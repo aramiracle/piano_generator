@@ -71,7 +71,7 @@ def train_model(model, dataloader, optimizer, criterion, device, epochs=10, star
             loss.backward()
             
             # Gradient clipping
-            torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=10.0)
+            torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=100.0)
             
             # Optimizer step
             optimizer.step()
