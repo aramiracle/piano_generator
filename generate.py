@@ -3,6 +3,7 @@ import torch
 def generate_sequence_from_batch(model, dataloader, gen_seq_len, vocab_size, device, reverse_vocab):
     """
     Generate a sequence while maintaining the transformation relationship with the source.
+    This version handles a wider range of MIDI-compatible events (note_on, note_off, time_shift, etc.)
     """
     model.eval()
 
@@ -14,9 +15,12 @@ def generate_sequence_from_batch(model, dataloader, gen_seq_len, vocab_size, dev
     current_src = inputs[0]
     current_tgt = targets[0]
     generated = torch.argmax(current_src, dim=-1).tolist()
-    
+
     seq_len = len(generated)
     last_note_value = None  # Track the last note value for maintaining relative pitch
+    active_notes = {}  # Store active notes by their pitch (for note_off events)
+    time_shift = 0  # Track time shifts if needed
+    tempo = 120  # Default tempo (beats per minute)
 
     for _ in range(gen_seq_len):
         # Prepare input sequences
@@ -31,22 +35,45 @@ def generate_sequence_from_batch(model, dataloader, gen_seq_len, vocab_size, dev
         
         # Apply transformation logic to maintain musical relationship
         event_type = reverse_vocab[next_token]
+        
         if event_type.startswith("note_"):
+            # Handle note events
             current_pitch = int(event_type.split("_")[1])
+            
             if last_note_value is None:
                 # First note - use as reference
                 last_note_value = current_pitch
+                event = f"note_on_{current_pitch}"
             else:
                 # Maintain relative pitch movement
                 pitch_diff = current_pitch - last_note_value
-                current_pitch = (last_note_value + pitch_diff) % 88  # Wrap around within range
+                current_pitch = (last_note_value + pitch_diff) % 128  # Wrap around within MIDI pitch range
                 last_note_value = current_pitch
+                event = f"note_on_{current_pitch}"
                 
-                # Update next_token based on transformed pitch
-                next_token = [k for k, v in reverse_vocab.items() if v == f"note_{current_pitch}"][0]
+            # Store the active note to generate "note_off" later
+            active_notes[current_pitch] = event
+        
+        elif event_type.startswith("note_off_"):
+            # Handle "note_off" event for ending the note
+            pitch = int(event_type.split("_")[2])
+            if pitch in active_notes:
+                event = f"note_off_{pitch}"
+                del active_notes[pitch]  # Remove from active notes after it's turned off
+        
         elif event_type.startswith("time_"):
-            # Keep timing events as is
-            last_note_value = None  # Reset pitch tracking after time events
+            # Handle time shift or tempo change
+            if event_type == "time_shift":
+                time_shift += 1  # Increment time shift (could be adjusted based on model output)
+                event = f"time_shift_{time_shift}"
+            elif event_type.startswith("tempo_"):
+                # Adjust tempo if it's a tempo event
+                new_tempo = int(event_type.split("_")[1])
+                tempo = new_tempo
+                event = f"tempo_{tempo}"
+        
+        else:
+            event = event_type  # Other events (like modifiers, etc.)
 
         generated.append(next_token)
 
@@ -58,4 +85,5 @@ def generate_sequence_from_batch(model, dataloader, gen_seq_len, vocab_size, dev
         current_src = torch.cat([current_src, next_one_hot], dim=0)[-seq_len:, :]
         current_tgt = torch.cat([current_tgt, next_one_hot], dim=0)[-seq_len:, :]
 
+    # Return the generated sequence
     return generated[seq_len:]
