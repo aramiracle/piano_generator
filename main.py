@@ -49,7 +49,7 @@ def main():
     model, optimizer, start_epoch, _ = load_latest_checkpoint(model, optimizer, checkpoint_dir=CHECKPOINT_DIR)
 
     # Train Model (start from the next epoch)
-    train_model(model, dataloader, optimizer, criterion, device, epochs=EPOCHS, start_epoch=start_epoch)
+    train_model(model, dataloader, optimizer, criterion, device, one_hot=ONE_HOT, epochs=EPOCHS, start_epoch=start_epoch)
     
     # Generate Sequence
     generated_sequence = generate_sequence_from_batch(
@@ -58,7 +58,8 @@ def main():
         gen_seq_len=GEN_SEQ_LEN,
         vocab_size=VOCAB_SIZE,
         device=device,
-        reverse_vocab=reverse_vocab
+        reverse_vocab=reverse_vocab,
+        one_hot=ONE_HOT
     )
 
     # Convert generated indices back to events
@@ -70,4 +71,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
