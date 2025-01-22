@@ -24,7 +24,7 @@ class MusicDataset(Dataset):
             src = self.one_hot_encode(src)
             tgt = self.one_hot_encode(tgt)
 
-        return torch.tensor(src, dtype=torch.float32), torch.tensor(tgt, dtype=torch.float32) if self.one_hot else torch.tensor(src, dtype=torch.int64), torch.tensor(tgt, dtype=torch.int64)
+        return torch.tensor(src, dtype=torch.int32), torch.tensor(tgt, dtype=torch.int32)
     
     def one_hot_encode(self, sequence):
         one_hot = np.zeros((len(sequence), self.vocab_size), dtype=np.float32)
