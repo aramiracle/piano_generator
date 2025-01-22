@@ -1,6 +1,6 @@
 import torch
 
-def generate_sequence_from_batch(model, dataloader, gen_seq_len, vocab_size, device, reverse_vocab):
+def generate_sequence_from_batch(model, dataloader, gen_seq_len, vocab_size, device, reverse_vocab, one_hot=True):
     """
     Generate a sequence while maintaining the transformation relationship with the source.
     This version handles a wider range of MIDI-compatible events (note_on, note_off, time_shift, etc.)
@@ -14,7 +14,10 @@ def generate_sequence_from_batch(model, dataloader, gen_seq_len, vocab_size, dev
     # Use the first sequence in the batch
     current_src = inputs[0]
     current_tgt = targets[0]
-    generated = torch.argmax(current_src, dim=-1).tolist()
+    if one_hot:
+        generated = torch.argmax(current_src, dim=-1).tolist()  # Get the most probable class if one-hot
+    else:
+        generated = current_src.tolist()  # If not one-hot, use token indices directly
 
     seq_len = len(generated)
     last_note_value = None  # Track the last note value for maintaining relative pitch
@@ -25,14 +28,21 @@ def generate_sequence_from_batch(model, dataloader, gen_seq_len, vocab_size, dev
     for _ in range(gen_seq_len):
         # Prepare input sequences
         src = current_src.unsqueeze(0)
-        tgt = current_tgt[:-1, :].unsqueeze(0)
+        
+        if one_hot:
+            tgt = current_tgt[:-1, :].unsqueeze(0)
+        else:  
+            tgt = current_tgt[:-1].unsqueeze(0)
 
         with torch.no_grad():
             output = model(src, tgt)
 
-        # Get the most probable next token
-        next_token = torch.argmax(output[:, -1, :], dim=-1).item()
-        
+        # Get the most probable next token (if one-hot, take argmax)
+        if one_hot:
+            next_token = torch.argmax(output[:, -1, :], dim=-1).item()
+        else:
+            next_token = output[:, -1, :].argmax(dim=-1).item()  # Directly use token index
+
         # Apply transformation logic to maintain musical relationship
         event_type = reverse_vocab[next_token]
         
@@ -83,13 +93,18 @@ def generate_sequence_from_batch(model, dataloader, gen_seq_len, vocab_size, dev
 
         generated.append(next_token)
 
-        # Convert the predicted token to one-hot encoding
-        next_one_hot = torch.zeros(1, vocab_size, device=device)
-        next_one_hot[0, next_token] = 1
+        # Convert the predicted token to one-hot encoding (if required)
+        if one_hot:
+            next_one_hot = torch.zeros(1, vocab_size, device=device)
+            next_one_hot[0, next_token] = 1
+        else:
+            next_one_hot = torch.tensor([next_token], device=device)  # Use token index directly
 
         # Update sequences
-        current_src = torch.cat([current_src, next_one_hot], dim=0)[-seq_len:, :]
-        current_tgt = torch.cat([current_tgt, next_one_hot], dim=0)[-seq_len:, :]
+        if one_hot:
+            current_src = torch.cat([current_src, next_one_hot], dim=0)[-seq_len:, :]
+        else:
+            current_src = torch.cat([current_src, next_one_hot], dim=0)[-seq_len:]
 
     # Return the generated sequence
     return generated[seq_len:]
