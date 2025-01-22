@@ -1,7 +1,7 @@
 import os
 import torch
 import torch.nn as nn
-from model import TransformerModel
+from model import TransformerModel, TransformerOneHotModel
 from train import train_model
 from dataset import get_dataloader
 from generate import generate_sequence_from_batch
@@ -26,17 +26,21 @@ def main():
     LEARNING_RATE = 3e-4  # Adjusted for quicker optimization with AdamW
     OUTPUT_FILENAME = "generated_song.mid"
     CHECKPOINT_DIR = "checkpoints"
+    ONE_HOT = False
 
     # Device
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Using device: {device}")
 
     # Load Preprocessed Data
-    dataloader, _, reverse_vocab = get_dataloader(SEQUENCES_PATH, batch_size=BATCH_SIZE)
+    dataloader, _, reverse_vocab = get_dataloader(SEQUENCES_PATH, batch_size=BATCH_SIZE, one_hot=ONE_HOT)
     print(f"Vocabulary size: {VOCAB_SIZE}")
 
     # Initialize Model
-    model = TransformerModel(VOCAB_SIZE, EMBED_SIZE, NUM_HEADS, NUM_LAYERS, FF_DIM, MAX_LEN, DROPOUT).to(device)
+    if ONE_HOT:
+        model = TransformerOneHotModel(VOCAB_SIZE, EMBED_SIZE, NUM_HEADS, NUM_LAYERS, FF_DIM, MAX_LEN, DROPOUT).to(device)
+    else:
+        model = TransformerModel(VOCAB_SIZE, EMBED_SIZE, NUM_HEADS, NUM_LAYERS, FF_DIM, MAX_LEN, DROPOUT).to(device)
     optimizer = torch.optim.AdamW(model.parameters(), lr=LEARNING_RATE)
     criterion = nn.CrossEntropyLoss(label_smoothing=LABEL_SMOOTHING)
 

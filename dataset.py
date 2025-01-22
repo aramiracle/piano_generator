@@ -4,9 +4,10 @@ import pickle
 import numpy as np
 
 class MusicDataset(Dataset):
-    def __init__(self, sequences, vocab_size):
+    def __init__(self, sequences, vocab_size, one_hot=True):
         self.sequences = sequences
         self.vocab_size = vocab_size
+        self.one_hot = one_hot
     
     def __len__(self):
         return len(self.sequences)
@@ -18,11 +19,12 @@ class MusicDataset(Dataset):
         # Target sequence is all tokens except the first one
         tgt = sequence[1:]
 
-        # Convert to one-hot encoding
-        src_one_hot = self.one_hot_encode(src)
-        tgt_one_hot = self.one_hot_encode(tgt)
+        if self.one_hot:
+            # Convert to one-hot encoding
+            src = self.one_hot_encode(src)
+            tgt = self.one_hot_encode(tgt)
 
-        return torch.tensor(src_one_hot, dtype=torch.int32), torch.tensor(tgt_one_hot, dtype=torch.int32)
+        return torch.tensor(src, dtype=torch.float32), torch.tensor(tgt, dtype=torch.float32) if self.one_hot else torch.tensor(src, dtype=torch.int64), torch.tensor(tgt, dtype=torch.int64)
     
     def one_hot_encode(self, sequence):
         one_hot = np.zeros((len(sequence), self.vocab_size), dtype=np.float32)
@@ -30,7 +32,7 @@ class MusicDataset(Dataset):
             one_hot[i, index] = 1.0
         return one_hot
 
-def get_dataloader(preprocessed_path, batch_size=16):
+def get_dataloader(preprocessed_path, batch_size=16, one_hot=True):
     # Load preprocessed data
     with open(preprocessed_path, 'rb') as f:
         data = pickle.load(f)
@@ -41,7 +43,7 @@ def get_dataloader(preprocessed_path, batch_size=16):
     vocab_size = len(vocab)
 
     # Create dataset
-    dataset = MusicDataset(sequences, vocab_size)
+    dataset = MusicDataset(sequences, vocab_size, one_hot)
     
     # Create dataloader
     dataloader = DataLoader(
