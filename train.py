@@ -3,7 +3,7 @@ import torch
 from tqdm import tqdm
 from utils import generate_square_subsequent_mask
 
-def train_model(model, dataloader, optimizer, criterion, device, epochs=10, start_epoch=0):
+def train_model(model, dataloader, optimizer, criterion, device, one_hot=True, epochs=10, start_epoch=0):
     """
     Train a Transformer model.
 
@@ -13,6 +13,7 @@ def train_model(model, dataloader, optimizer, criterion, device, epochs=10, star
         optimizer (torch.optim.Optimizer): Optimizer for training.
         criterion (nn.Module): Loss function.
         device (torch.device): Device to use for training (e.g., 'cuda' or 'cpu').
+        one_hot (bool): Whether the input is one-hot encoded (True) or token indices (False).
         epochs (int): Number of training epochs.
         start_epoch (int): Epoch to start training from (useful when resuming training).
     """
@@ -33,9 +34,24 @@ def train_model(model, dataloader, optimizer, criterion, device, epochs=10, star
             src = src.to(device)
             tgt = tgt.to(device)
             
-            # Prepare target input and output
-            tgt_input = tgt[:, :-1]
-            tgt_output = tgt[:, 1:]
+            if one_hot:
+                # Handle one-hot encoded input
+                # Prepare target input and output
+                tgt_input = tgt[:, :-1]
+                tgt_output = tgt[:, 1:]
+                
+                # Key padding masks for one-hot
+                src_key_padding_mask = (src.sum(dim=-1) == 0)
+                tgt_key_padding_mask = (tgt_input.sum(dim=-1) == 0)
+            else:
+                # Handle token index input
+                # Prepare target input and output
+                tgt_input = tgt[:, :-1]
+                tgt_output = tgt[:, 1:]
+                
+                # Key padding masks for token indices
+                src_key_padding_mask = (src == 0)  # Assuming 0 is the padding token
+                tgt_key_padding_mask = (tgt_input == 0)
             
             # Generate masks
             src_seq_len = src.size(1)
@@ -43,10 +59,6 @@ def train_model(model, dataloader, optimizer, criterion, device, epochs=10, star
             src_mask = generate_square_subsequent_mask(src_seq_len, device)
             tgt_mask = generate_square_subsequent_mask(tgt_seq_len, device)
             
-            # Key padding masks
-            src_key_padding_mask = (src.sum(dim=-1) == 0)
-            tgt_key_padding_mask = (tgt_input.sum(dim=-1) == 0)
-
             # Clear gradients
             optimizer.zero_grad(set_to_none=True)
 
@@ -60,9 +72,14 @@ def train_model(model, dataloader, optimizer, criterion, device, epochs=10, star
                 tgt_key_padding_mask=tgt_key_padding_mask,
             )
             
-            # Reshape for loss calculation
-            output = output.contiguous().view(-1, model.vocab_size)  # Model output, already float
-            tgt_output = tgt_output.contiguous().view(-1, model.vocab_size).float()  # Target, ensure it's integer for class indices
+            if one_hot:
+                # Reshape for loss calculation with one-hot
+                output = output.contiguous().view(-1, model.vocab_size)
+                tgt_output = tgt_output.contiguous().view(-1, model.vocab_size).float()
+            else:
+                # Reshape for loss calculation with token indices
+                output = output.contiguous().view(-1, model.vocab_size)
+                tgt_output = tgt_output.contiguous().view(-1).long()
 
             # Calculate loss
             loss = criterion(output, tgt_output)
@@ -81,10 +98,17 @@ def train_model(model, dataloader, optimizer, criterion, device, epochs=10, star
             epoch_loss += loss_item
 
             # Calculate accuracy
-            _, predicted = torch.max(output, dim=-1)  # Get the index of the max log-probability
-            correct = (predicted == torch.argmax(tgt_output, dim=-1).view(-1)).sum().item()  # Compare with ground truth
+            if one_hot:
+                _, predicted = torch.max(output, dim=-1)
+                correct = (predicted == torch.argmax(tgt_output, dim=-1).view(-1)).sum().item()
+                total = tgt_output.size(0)
+            else:
+                _, predicted = torch.max(output, dim=-1)
+                correct = (predicted == tgt_output).sum().item()
+                total = tgt_output.size(0)
+            
             epoch_correct += correct
-            epoch_total += tgt_output.numel()  # Total number of tokens
+            epoch_total += total
 
             # Update progress bar
             accuracy = 100 * epoch_correct / epoch_total
