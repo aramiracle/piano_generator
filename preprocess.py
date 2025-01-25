@@ -4,7 +4,7 @@ from pathlib import Path
 from tqdm import tqdm
 import pickle
 
-def midi_to_event_sequence(midi_path, max_events=512, min_note=21, max_note=108, quantized_shift_gap=100):
+def midi_to_event_sequence(midi_path, max_events=512, min_note=21, max_note=108, quantized_shift_gap=100, max_time_shift=500):
     """
     Converts a MIDI file into a sequence of events with reduced vocabulary size.
     Handles note-on/note-off events and incorporates time differences as integers.
@@ -20,10 +20,10 @@ def midi_to_event_sequence(midi_path, max_events=512, min_note=21, max_note=108,
         mapped_pitch = min(max_note, max(min_note, note.pitch))
 
         # Add time-shift events in terms of integer time difference (milliseconds)
-        time_shift = int((note.start - prev_time) * 1000)  # Convert time shift to milliseconds (integer)
+        time_shift = int((note.start - prev_time) * 100)  # Convert time shift to milliseconds (integer)
         if time_shift > 0:
-            # Quantizing time shift to steps (integer)
-            quantized_shift = (time_shift // quantized_shift_gap) * quantized_shift_gap
+            # Quantizing time shift to steps (integer) and ensuring it's at most 500ms
+            quantized_shift = min((time_shift // quantized_shift_gap) * quantized_shift_gap, max_time_shift)
             events.append(f"time_shift_{quantized_shift}")
         prev_time = note.start
 

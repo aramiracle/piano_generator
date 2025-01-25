@@ -26,7 +26,7 @@ def generate_sequence_from_batch(model, dataloader, gen_seq_len, vocab_size, dev
     tempo = 120  # Default tempo (beats per minute)
 
     for _ in range(gen_seq_len):
-        # Prepare input sequences
+        # Prepare input sequences for the next chunk
         src = current_src.unsqueeze(0)
         
         if one_hot:
@@ -34,62 +34,25 @@ def generate_sequence_from_batch(model, dataloader, gen_seq_len, vocab_size, dev
         else:  
             tgt = current_tgt[:-1].unsqueeze(0)
 
+        # Generate the next chunk using generate_sequence
         with torch.no_grad():
-            output = model(src, tgt)
+            chunk = model.generate_sequence(
+                src=src,
+                predict_length=1,  # Generate one token at a time, but can be adjusted
+                src_mask=None,
+                tgt_mask=None,
+                memory_mask=None,
+                src_key_padding_mask=None,
+                tgt_key_padding_mask=None,
+                memory_key_padding_mask=None,
+                temperature=1.0
+            )
 
-        # Get the most probable next token (if one-hot, take argmax)
-        if one_hot:
-            next_token = torch.argmax(output[:, -1, :], dim=-1).item()
-        else:
-            next_token = output[:, -1, :].argmax(dim=-1).item()  # Directly use token index
+        # Get the next token from the generated chunk
+        next_token = chunk[:, -1, :].argmax(dim=-1).item() if one_hot else chunk[:, -1].item()
 
         # Apply transformation logic to maintain musical relationship
         event_type = reverse_vocab[next_token]
-        
-        if event_type.startswith("note_"):
-            if event_type.startswith("note_on_"):
-                # Handle "note_on" event
-                if len(event_type.split("_")) > 2:
-                    current_pitch = int(event_type.split("_")[2])
-                else:
-                    # If there's no pitch value (just "note_on_"), skip to next token
-                    continue
-                
-                if last_note_value is None:
-                    # First note - use as reference
-                    last_note_value = current_pitch
-                    event = f"note_on_{current_pitch}"
-                else:
-                    # Maintain relative pitch movement
-                    pitch_diff = current_pitch - last_note_value
-                    current_pitch = (last_note_value + pitch_diff) % 128  # Wrap around within MIDI pitch range
-                    last_note_value = current_pitch
-                    event = f"note_on_{current_pitch}"
-                
-                # Store the active note to generate "note_off" later
-                active_notes[current_pitch] = event
-
-            elif event_type.startswith("note_off_"):
-                # Handle "note_off" event for ending the note
-                if len(event_type.split("_")) > 2:
-                    pitch = int(event_type.split("_")[2])
-                    if pitch in active_notes:
-                        event = f"note_off_{pitch}"
-                        del active_notes[pitch]  # Remove from active notes after it's turned off
-        
-        elif event_type.startswith("time_"):
-            # Handle time shift or tempo change
-            if event_type == "time_shift":
-                time_shift += 1  # Increment time shift (could be adjusted based on model output)
-                event = f"time_shift_{time_shift}"
-            elif event_type.startswith("tempo_"):
-                # Adjust tempo if it's a tempo event
-                new_tempo = int(event_type.split("_")[1])
-                tempo = new_tempo
-                event = f"tempo_{tempo}"
-        
-        else:
-            event = event_type  # Other events (like modifiers, etc.)
 
         generated.append(next_token)
 
@@ -100,7 +63,7 @@ def generate_sequence_from_batch(model, dataloader, gen_seq_len, vocab_size, dev
         else:
             next_note = torch.tensor([next_token], device=device)  # Use token index directly
 
-        # Update sequences
+        # Update sequences for the next chunk generation
         if one_hot:
             current_src = torch.cat([current_src, next_one_hot], dim=0)[1:, :]
         else:

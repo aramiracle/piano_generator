@@ -2,18 +2,6 @@ import torch
 import torch.nn as nn
 
 class TransformerOneHotModel(nn.Module):
-    """
-    A Transformer model for sequence-to-sequence tasks.
-
-    Args:
-        vocab_size (int): Size of the vocabulary.
-        d_model (int): Dimensionality of the model embeddings.
-        num_heads (int): Number of attention heads in the multi-head attention mechanism.
-        num_layers (int): Number of encoder and decoder layers.
-        ff_dim (int): Dimensionality of the feedforward network in each layer.
-        max_len (int): Maximum sequence length for positional encoding.
-        dropout (float): Dropout rate applied throughout the model.
-    """
     def __init__(self, vocab_size, d_model, num_heads, num_layers, ff_dim, max_len=512, dropout=0.1):
         super(TransformerOneHotModel, self).__init__()
         self.d_model = d_model
@@ -37,14 +25,6 @@ class TransformerOneHotModel(nn.Module):
     
     @staticmethod
     def _generate_positional_encoding(max_len, d_model):
-        """
-        Generates positional encoding for the model.
-        Args:
-            max_len (int): Maximum sequence length.
-            d_model (int): Dimensionality of the embeddings.
-        Returns:
-            Tensor: Positional encoding tensor of shape (1, max_len, d_model).
-        """
         position = torch.arange(max_len).unsqueeze(1)
         div_term = torch.exp(torch.arange(0, d_model, 2) * (-torch.log(torch.tensor(10000.0)) / d_model))
         pe = torch.zeros(1, max_len, d_model)
@@ -54,16 +34,6 @@ class TransformerOneHotModel(nn.Module):
 
     def forward(self, src, tgt, src_mask=None, tgt_mask=None, memory_mask=None, 
                 src_key_padding_mask=None, tgt_key_padding_mask=None, memory_key_padding_mask=None):
-        """
-        Forward pass of the Transformer model.
-        Args:
-            src (Tensor): Source sequence of shape (batch_size, seq_len, vocab_size).
-            tgt (Tensor): Target sequence of shape (batch_size, seq_len, vocab_size).
-            src_mask, tgt_mask, memory_mask: Attention masks for source, target, and memory.
-            src_key_padding_mask, tgt_key_padding_mask, memory_key_padding_mask: Padding masks.
-        Returns:
-            Tensor: Output logits of shape (batch_size, seq_len, vocab_size).
-        """
         src_emb = self._embed(src)
         tgt_emb = self._embed(tgt)
         
@@ -81,36 +51,74 @@ class TransformerOneHotModel(nn.Module):
         return self.fc_out(out)
     
     def _embed(self, x):
-        # Ensure x is of type float
-        x = x.float()  # Convert to float if not already
+        x = x.float()
         x_emb = self.input_projection(x) * torch.sqrt(torch.tensor(self.d_model, dtype=torch.float32, device=x.device))
-        
-        # Add positional encoding by indexing
-        seq_len = x.size(1)  # Get the sequence length of the input
+        seq_len = x.size(1)
         x_emb = x_emb + self.positional_encoding[:, :seq_len, :].to(x.device)
-        
         return self.dropout(x_emb)
+    
+    def generate_sequence(self, src, predict_length, src_mask=None, tgt_mask=None, memory_mask=None, 
+                        src_key_padding_mask=None, tgt_key_padding_mask=None, memory_key_padding_mask=None, temperature=1.0):
+        """
+        Generate a sequence of predictions with one-hot encoding.
+        
+        Args:
+            src (Tensor): Source sequence of shape (batch_size, seq_len, vocab_size)
+            predict_length (int): Length of the sequence to generate
+            src_mask (Tensor, optional): Source sequence mask
+            tgt_mask (Tensor, optional): Target sequence mask
+            memory_mask (Tensor, optional): Memory mask
+            src_key_padding_mask (Tensor, optional): Source key padding mask
+            tgt_key_padding_mask (Tensor, optional): Target key padding mask
+            memory_key_padding_mask (Tensor, optional): Memory key padding mask
+            temperature (float): Sampling temperature (higher = more random)
+        
+        Returns:
+            Tensor: Generated sequence of shape (batch_size, predict_length, vocab_size)
+        """
+        device = src.device
+        batch_size = src.size(0)
 
+        # Initialize target sequence with zeros (use appropriate start token for specific tasks)
+        tgt = torch.zeros((batch_size, 1, self.vocab_size), device=device)
+        generated_sequence = []
+
+        for _ in range(predict_length):
+            # Create masks for the current sequence
+            tgt_mask = self.transformer.generate_square_subsequent_mask(tgt.size(1)).to(device)
+            
+            # Get predictions
+            with torch.no_grad():
+                output = self.forward(
+                    src=src,
+                    tgt=tgt,
+                    src_mask=src_mask,
+                    tgt_mask=tgt_mask,
+                    memory_mask=memory_mask,
+                    src_key_padding_mask=src_key_padding_mask,
+                    tgt_key_padding_mask=tgt_key_padding_mask,
+                    memory_key_padding_mask=memory_key_padding_mask
+                )
+            
+            next_token_logits = output[:, -1:, :] / temperature
+            next_token_probs = torch.softmax(next_token_logits, dim=-1)
+            next_token = torch.multinomial(next_token_probs.squeeze(1), 1).unsqueeze(1)
+            
+            # Convert to one-hot
+            next_token_onehot = torch.zeros((batch_size, 1, self.vocab_size), device=device)
+            next_token_onehot.scatter_(-1, next_token.unsqueeze(-1), 1)
+            
+            generated_sequence.append(next_token_onehot)
+            tgt = torch.cat([tgt, next_token_onehot], dim=1)
+
+        return torch.cat(generated_sequence, dim=1)
 class TransformerModel(nn.Module):
-    """
-    A Transformer model for sequence-to-sequence tasks with token embeddings.
-
-    Args:
-        vocab_size (int): Size of the vocabulary.
-        d_model (int): Dimensionality of the model embeddings.
-        num_heads (int): Number of attention heads in the multi-head attention mechanism.
-        num_layers (int): Number of encoder and decoder layers.
-        ff_dim (int): Dimensionality of the feedforward network in each layer.
-        max_len (int): Maximum sequence length for positional encoding.
-        dropout (float): Dropout rate applied throughout the model.
-    """
     def __init__(self, vocab_size, d_model, num_heads, num_layers, ff_dim, max_len=512, dropout=0.1):
         super(TransformerModel, self).__init__()
         self.d_model = d_model
         self.vocab_size = vocab_size
         self.max_len = max_len
         
-        # Token embedding layer instead of linear projection
         self.embedding = nn.Embedding(vocab_size, d_model)
         self.positional_encoding = self._generate_positional_encoding(max_len, d_model)
         
@@ -128,14 +136,6 @@ class TransformerModel(nn.Module):
     
     @staticmethod
     def _generate_positional_encoding(max_len, d_model):
-        """
-        Generates positional encoding for the model.
-        Args:
-            max_len (int): Maximum sequence length.
-            d_model (int): Dimensionality of the embeddings.
-        Returns:
-            Tensor: Positional encoding tensor of shape (1, max_len, d_model).
-        """
         position = torch.arange(max_len).unsqueeze(1)
         div_term = torch.exp(torch.arange(0, d_model, 2) * (-torch.log(torch.tensor(10000.0)) / d_model))
         pe = torch.zeros(1, max_len, d_model)
@@ -145,16 +145,6 @@ class TransformerModel(nn.Module):
 
     def forward(self, src, tgt, src_mask=None, tgt_mask=None, memory_mask=None, 
                 src_key_padding_mask=None, tgt_key_padding_mask=None, memory_key_padding_mask=None):
-        """
-        Forward pass of the Transformer model.
-        Args:
-            src (Tensor): Source sequence of token indices of shape (batch_size, seq_len).
-            tgt (Tensor): Target sequence of token indices of shape (batch_size, seq_len).
-            src_mask, tgt_mask, memory_mask: Attention masks for source, target, and memory.
-            src_key_padding_mask, tgt_key_padding_mask, memory_key_padding_mask: Padding masks.
-        Returns:
-            Tensor: Output logits of shape (batch_size, seq_len, vocab_size).
-        """
         src_emb = self._embed(src)
         tgt_emb = self._embed(tgt)
         
@@ -172,11 +162,58 @@ class TransformerModel(nn.Module):
         return self.fc_out(out)
     
     def _embed(self, x):
-        # Embed the token indices
         x_emb = self.embedding(x) * torch.sqrt(torch.tensor(self.d_model, dtype=torch.float32, device=x.device))
-        
-        # Add positional encoding by indexing
-        seq_len = x.size(1)  # Get the sequence length of the input
+        seq_len = x.size(1)
         x_emb = x_emb + self.positional_encoding[:, :seq_len, :].to(x.device)
-        
         return self.dropout(x_emb)
+    
+    def generate_sequence(self, src, predict_length, src_mask=None, tgt_mask=None, memory_mask=None, 
+                        src_key_padding_mask=None, tgt_key_padding_mask=None, memory_key_padding_mask=None, temperature=1.0):
+        """
+        Generate a sequence of predictions with token indices.
+        
+        Args:
+            src (Tensor): Source sequence of token indices of shape (batch_size, seq_len)
+            predict_length (int): Length of the sequence to generate
+            src_mask (Tensor, optional): Source sequence mask
+            tgt_mask (Tensor, optional): Target sequence mask
+            memory_mask (Tensor, optional): Memory mask
+            src_key_padding_mask (Tensor, optional): Source key padding mask
+            tgt_key_padding_mask (Tensor, optional): Target key padding mask
+            memory_key_padding_mask (Tensor, optional): Memory key padding mask
+            temperature (float): Sampling temperature (higher = more random)
+        
+        Returns:
+            Tensor: Generated sequence of token indices of shape (batch_size, predict_length)
+        """
+        device = src.device
+        batch_size = src.size(0)
+
+        # Initialize target sequence with first token (you might want to use a special start token)
+        tgt = torch.zeros((batch_size, 1), dtype=torch.long, device=device)
+        generated_sequence = []
+
+        for _ in range(predict_length):
+            tgt_mask = self.transformer.generate_square_subsequent_mask(tgt.size(1)).to(device)
+            
+            # Get predictions
+            with torch.no_grad():
+                output = self.forward(
+                    src=src,
+                    tgt=tgt,
+                    src_mask=src_mask,
+                    tgt_mask=tgt_mask,
+                    memory_mask=memory_mask,
+                    src_key_padding_mask=src_key_padding_mask,
+                    tgt_key_padding_mask=tgt_key_padding_mask,
+                    memory_key_padding_mask=memory_key_padding_mask
+                )
+            
+            next_token_logits = output[:, -1:, :] / temperature
+            next_token_probs = torch.softmax(next_token_logits, dim=-1)
+            next_token = torch.multinomial(next_token_probs.squeeze(1), 1)
+            
+            generated_sequence.append(next_token)
+            tgt = torch.cat([tgt, next_token], dim=1)
+
+        return torch.cat(generated_sequence, dim=1)

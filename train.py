@@ -3,19 +3,20 @@ import torch
 from tqdm import tqdm
 from utils import generate_square_subsequent_mask
 
-def train_model(model, dataloader, optimizer, criterion, device, one_hot=True, epochs=10, start_epoch=0):
+def train_model(model, dataloader, optimizer, criterion, device, predict_length, one_hot=True, epochs=10, start_epoch=0):
     """
-    Train a Transformer model.
+    Train a Transformer model to predict the last predict_length tokens of the target sequence.
 
     Args:
         model (nn.Module): Transformer model.
         dataloader (DataLoader): DataLoader providing training data.
         optimizer (torch.optim.Optimizer): Optimizer for training.
         criterion (nn.Module): Loss function.
-        device (torch.device): Device to use for training (e.g., 'cuda' or 'cpu').
+        device (torch.device): Device to use for training.
+        predict_length (int): Length of sequence to predict at the end.
         one_hot (bool): Whether the input is one-hot encoded (True) or token indices (False).
         epochs (int): Number of training epochs.
-        start_epoch (int): Epoch to start training from (useful when resuming training).
+        start_epoch (int): Epoch to start training from.
     """
     model.train()
     
@@ -35,22 +36,24 @@ def train_model(model, dataloader, optimizer, criterion, device, one_hot=True, e
             tgt = tgt.to(device)
             
             if one_hot:
-                # Handle one-hot encoded input
-                # Prepare target input and output
-                tgt_input = tgt[:, :-1]
-                tgt_output = tgt[:, 1:]
+                # For one-hot encoded input
+                # Get the input sequence (everything except last predict_length tokens)
+                tgt_input = tgt[:, :-predict_length]
+                # Get the sequence to predict (last predict_length tokens)
+                tgt_output = tgt[:, -predict_length:]
                 
-                # Key padding masks for one-hot
+                # Key padding masks
                 src_key_padding_mask = (src.sum(dim=-1) == 0)
                 tgt_key_padding_mask = (tgt_input.sum(dim=-1) == 0)
             else:
-                # Handle token index input
-                # Prepare target input and output
-                tgt_input = tgt[:, :-1]
-                tgt_output = tgt[:, 1:]
+                # For token index input
+                # Get the input sequence (everything except last predict_length tokens)
+                tgt_input = tgt[:, :-predict_length]
+                # Get the sequence to predict (last predict_length tokens)
+                tgt_output = tgt[:, -predict_length:]
                 
-                # Key padding masks for token indices
-                src_key_padding_mask = (src == 0)  # Assuming 0 is the padding token
+                # Key padding masks
+                src_key_padding_mask = (src == 0)
                 tgt_key_padding_mask = (tgt_input == 0)
             
             # Generate masks
@@ -71,6 +74,9 @@ def train_model(model, dataloader, optimizer, criterion, device, one_hot=True, e
                 src_key_padding_mask=src_key_padding_mask,
                 tgt_key_padding_mask=tgt_key_padding_mask,
             )
+            
+            # Get the predictions for the last predict_length tokens
+            output = output[:, -predict_length:]
             
             if one_hot:
                 # Reshape for loss calculation with one-hot
@@ -111,14 +117,14 @@ def train_model(model, dataloader, optimizer, criterion, device, one_hot=True, e
             epoch_total += total
 
             # Update progress bar
-            accuracy = 100 * epoch_correct / epoch_total
+            accuracy = 100 * correct / total
             progress_bar.set_postfix({'loss': f'{loss_item:.4f}', 'accuracy': f'{accuracy:.2f}%'})
 
         avg_loss = epoch_loss / len(dataloader)
         avg_accuracy = 100 * epoch_correct / epoch_total
         print(f"Epoch {epoch + 1}/{epochs}, Average Loss: {avg_loss:.4f}, Average Accuracy: {avg_accuracy:.2f}%")
         
-        # Save checkpoint in the checkpoints directory
+        # Save checkpoint
         checkpoint_path = os.path.join(checkpoints_dir, f'checkpoint_epoch_{epoch+1}.pt')
         torch.save({
             'epoch': epoch + 1,

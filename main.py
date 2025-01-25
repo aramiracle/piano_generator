@@ -19,11 +19,12 @@ def main():
     FF_DIM = 1024
     MAX_LEN = 768  # Adjusted based on typical sequence lengths
     DROPOUT = 0.2
-    EPOCHS = 100  # Increased for potentially better convergence
+    EPOCHS = 30  # Increased for potentially better convergence
     BATCH_SIZE = 64  # Reduced if memory is a concern
     GEN_SEQ_LEN = 1000
     LABEL_SMOOTHING = 0.3
     LEARNING_RATE = 3e-4  # Adjusted for quicker optimization with AdamW
+    PREDICT_LENGTH = 10
     OUTPUT_FILENAME = "generated_song.mid"
     CHECKPOINT_DIR = "checkpoints"
     ONE_HOT = False
@@ -49,7 +50,7 @@ def main():
     model, optimizer, start_epoch, _ = load_latest_checkpoint(model, optimizer, checkpoint_dir=CHECKPOINT_DIR)
 
     # Train Model (start from the next epoch)
-    train_model(model, dataloader, optimizer, criterion, device, one_hot=ONE_HOT, epochs=EPOCHS, start_epoch=start_epoch)
+    train_model(model, dataloader, optimizer, criterion, device, predict_length=PREDICT_LENGTH, one_hot=ONE_HOT, epochs=EPOCHS, start_epoch=start_epoch)
     
     # Generate Sequence
     generated_sequence = generate_sequence_from_batch(
