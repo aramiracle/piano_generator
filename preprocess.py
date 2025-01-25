@@ -76,7 +76,7 @@ def generate_midi_from_events(events, output_path):
     for event in events:
         if event.startswith("time_shift_"):
             try:
-                time_shift = int(event.split("_")[1]) / 1000  # Convert back to seconds
+                time_shift = int(event.split("_")[2]) / 1000  # Convert back to seconds
                 prev_time += time_shift
             except (ValueError, IndexError):
                 print(f"Invalid time_shift event: {event}")
