@@ -20,7 +20,7 @@ def main():
     MAX_LEN = 2048  # Adjusted based on typical sequence lengths
     DROPOUT = 0.2
     EPOCHS = 30  # Increased for potentially better convergence
-    BATCH_SIZE = 64  # Reduced if memory is a concern
+    BATCH_SIZE = 20  # Reduced if memory is a concern
     GEN_SEQ_LEN = 1000
     LABEL_SMOOTHING = 0.3
     LEARNING_RATE = 3e-4  # Adjusted for quicker optimization with AdamW
