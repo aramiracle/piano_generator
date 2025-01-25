@@ -98,13 +98,13 @@ def generate_sequence_from_batch(model, dataloader, gen_seq_len, vocab_size, dev
             next_one_hot = torch.zeros(1, vocab_size, device=device)
             next_one_hot[0, next_token] = 1
         else:
-            next_one_hot = torch.tensor([next_token], device=device)  # Use token index directly
+            next_note = torch.tensor([next_token], device=device)  # Use token index directly
 
         # Update sequences
         if one_hot:
-            current_src = torch.cat([current_src, next_one_hot], dim=0)[-seq_len:, :]
+            current_src = torch.cat([current_src, next_one_hot], dim=0)[1:, :]
         else:
-            current_src = torch.cat([current_src, next_one_hot], dim=0)[-seq_len:]
+            current_src = torch.cat([current_src, next_note], dim=0)[1:]
 
     # Return the generated sequence
     return generated[seq_len:]
