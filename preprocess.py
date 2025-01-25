@@ -64,12 +64,12 @@ def indices_to_events(indices, reverse_vocab):
     """
     return [reverse_vocab[idx] for idx in indices]
 
-def generate_midi_from_events(events, output_path, instrument_name="Piano"):
+def generate_midi_from_events(events, output_path):
     """
     Generates a MIDI file from the sequence of events and saves it to the specified path.
     """
     midi = pretty_midi.PrettyMIDI()
-    instrument = pretty_midi.Instrument(program=pretty_midi.program_to_instrument(program=0))  # Piano
+    instrument = pretty_midi.Instrument(program=0)  # Piano
     prev_time = 0
     active_notes = {}
 
@@ -87,7 +87,6 @@ def generate_midi_from_events(events, output_path, instrument_name="Piano"):
             if pitch in active_notes:
                 note = active_notes.pop(pitch)
                 note.end = prev_time  # End time is the current time
-        prev_time += 0.5  # Fixed duration for simplicity (can be adjusted)
 
     midi.instruments.append(instrument)
     midi.write(output_path)
