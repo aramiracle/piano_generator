@@ -13,11 +13,11 @@ def main():
     VOCAB_SIZE = load_vocab_size(SEQUENCES_PATH)
     
     # Updated Hyperparameters
-    EMBED_SIZE = 256
+    EMBED_SIZE = 128
     NUM_HEADS = 4
     NUM_LAYERS = 4
-    FF_DIM = 1024
-    MAX_LEN = 768  # Adjusted based on typical sequence lengths
+    FF_DIM = 512
+    MAX_LEN = 2048  # Adjusted based on typical sequence lengths
     DROPOUT = 0.2
     EPOCHS = 30  # Increased for potentially better convergence
     BATCH_SIZE = 64  # Reduced if memory is a concern

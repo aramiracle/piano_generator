@@ -4,7 +4,7 @@ from pathlib import Path
 from tqdm import tqdm
 import pickle
 
-def midi_to_event_sequence(midi_path, max_events=512, min_note=21, max_note=108, quantized_shift_gap=100, max_time_shift=500):
+def midi_to_event_sequence(midi_path, max_events=512, quantized_shift_gap=50, max_time_shift=500):
     """
     Converts a MIDI file into a sequence of events with reduced vocabulary size.
     Handles note-on/note-off events and incorporates time differences as integers.
@@ -16,9 +16,6 @@ def midi_to_event_sequence(midi_path, max_events=512, min_note=21, max_note=108,
 
     # Process notes into events
     for note in sorted(midi_data.instruments[0].notes, key=lambda n: n.start):
-        # Ensure valid note pitch is within the specified range
-        mapped_pitch = min(max_note, max(min_note, note.pitch))
-
         # Add time-shift events in terms of integer time difference (milliseconds)
         time_shift = int((note.start - prev_time) * 100)  # Convert time shift to milliseconds (integer)
         if time_shift > 0:
@@ -28,12 +25,11 @@ def midi_to_event_sequence(midi_path, max_events=512, min_note=21, max_note=108,
         prev_time = note.start
 
         # Add note-on event (start of the note)
-        relative_pitch = mapped_pitch - min_note
-        events.append(f"note_on_{relative_pitch}")
-        active_notes.add(relative_pitch)  # Mark the note as active
+        events.append(f"note_on_{note.pitch}")
+        active_notes.add(note.pitch)  # Mark the note as active
         
         # Add note-off event (end of the note)
-        events.append(f"note_off_{relative_pitch}")
+        events.append(f"note_off_{note.pitch}")
 
         # Truncate if sequence gets too long
         if len(events) >= max_events:
@@ -126,7 +122,7 @@ def preprocess_dataset(dataset_path, output_path, max_events=512, max_files=None
 def main():
     DATASET_PATH = "dataset/maestro-v3.0.0"
     OUTPUT_PATH = "dataset/preprocessed"
-    MAX_EVENTS = 768
+    MAX_EVENTS = 2048
     MAX_FILES = None
     
     preprocess_dataset(DATASET_PATH, OUTPUT_PATH, max_events=MAX_EVENTS, max_files=MAX_FILES)
