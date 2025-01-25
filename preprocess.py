@@ -17,7 +17,7 @@ def midi_to_event_sequence(midi_path, max_events=512, quantized_shift_gap=50, ma
     # Process notes into events
     for note in sorted(midi_data.instruments[0].notes, key=lambda n: n.start):
         # Add time-shift events in terms of integer time difference (milliseconds)
-        time_shift = int((note.start - prev_time) * 100)  # Convert time shift to milliseconds (integer)
+        time_shift = int((note.start - prev_time) * 1000)  # Convert time shift to milliseconds (integer)
         if time_shift > 0:
             # Quantizing time shift to steps (integer) and ensuring it's at most 500ms
             quantized_shift = min((time_shift // quantized_shift_gap) * quantized_shift_gap, max_time_shift)
@@ -57,6 +57,40 @@ def events_to_indices(events, vocab):
     Converts event sequences to index sequences using the vocabulary.
     """
     return [vocab[event] for event in events]
+
+def indices_to_events(indices, reverse_vocab):
+    """
+    Converts index sequences back to event sequences using the reverse vocabulary.
+    """
+    return [reverse_vocab[idx] for idx in indices]
+
+def generate_midi_from_events(events, output_path, instrument_name="Piano"):
+    """
+    Generates a MIDI file from the sequence of events and saves it to the specified path.
+    """
+    midi = pretty_midi.PrettyMIDI()
+    instrument = pretty_midi.Instrument(program=pretty_midi.program_to_instrument(program=0))  # Piano
+    prev_time = 0
+    active_notes = {}
+
+    for event in events:
+        if event.startswith("time_shift_"):
+            time_shift = int(event.split("_")[1]) / 1000  # Convert back to seconds
+            prev_time += time_shift
+        elif event.startswith("note_on_"):
+            pitch = int(event.split("_")[2])
+            note = pretty_midi.Note(velocity=100, pitch=pitch, start=prev_time, end=prev_time + 0.5)  # 0.5 sec duration
+            instrument.notes.append(note)
+            active_notes[pitch] = note
+        elif event.startswith("note_off_"):
+            pitch = int(event.split("_")[2])
+            if pitch in active_notes:
+                note = active_notes.pop(pitch)
+                note.end = prev_time  # End time is the current time
+        prev_time += 0.5  # Fixed duration for simplicity (can be adjusted)
+
+    midi.instruments.append(instrument)
+    midi.write(output_path)
 
 def preprocess_dataset(dataset_path, output_path, max_events=512, max_files=None):
     """
@@ -118,6 +152,11 @@ def preprocess_dataset(dataset_path, output_path, max_events=512, max_files=None
     print(f"Vocabulary size: {len(vocab)}")
     print(f"Sequence length: {max_events}")
     print(f"Number of sequences: {len(src_sequences)}")
+
+    # Save one sample MIDI file from the source sequences for checking
+    sample_midi_file = output_path / "sample_output.mid"
+    generate_midi_from_events(src_sequences[0], sample_midi_file)
+    print(f"Sample MIDI file saved to {sample_midi_file}")
 
 def main():
     DATASET_PATH = "dataset/maestro-v3.0.0"
