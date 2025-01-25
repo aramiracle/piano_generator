@@ -75,18 +75,32 @@ def generate_midi_from_events(events, output_path):
 
     for event in events:
         if event.startswith("time_shift_"):
-            time_shift = int(event.split("_")[1]) / 1000  # Convert back to seconds
-            prev_time += time_shift
+            try:
+                time_shift = int(event.split("_")[1]) / 1000  # Convert back to seconds
+                prev_time += time_shift
+            except (ValueError, IndexError):
+                print(f"Invalid time_shift event: {event}")
+                continue
         elif event.startswith("note_on_"):
-            pitch = int(event.split("_")[2])
-            note = pretty_midi.Note(velocity=100, pitch=pitch, start=prev_time, end=prev_time + 0.5)  # 0.5 sec duration
-            instrument.notes.append(note)
-            active_notes[pitch] = note
+            try:
+                pitch = int(event.split("_")[2])
+                note = pretty_midi.Note(velocity=100, pitch=pitch, start=prev_time, end=prev_time + 0.5)  # 0.5 sec duration
+                instrument.notes.append(note)
+                active_notes[pitch] = note
+            except (ValueError, IndexError):
+                print(f"Invalid note_on event: {event}")
+                continue
         elif event.startswith("note_off_"):
-            pitch = int(event.split("_")[2])
-            if pitch in active_notes:
-                note = active_notes.pop(pitch)
-                note.end = prev_time  # End time is the current time
+            try:
+                pitch = int(event.split("_")[2])
+                if pitch in active_notes:
+                    note = active_notes.pop(pitch)
+                    note.end = prev_time  # End time is the current time
+            except (ValueError, IndexError):
+                print(f"Invalid note_off event: {event}")
+                continue
+        else:
+            print(f"Unknown event: {event}")
 
     midi.instruments.append(instrument)
     midi.write(output_path)
