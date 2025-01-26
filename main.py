@@ -20,11 +20,11 @@ def main():
     MAX_LEN = 768  # Adjusted based on typical sequence lengths
     DROPOUT = 0.2
     EPOCHS = 50  # Increased for potentially better convergence
-    BATCH_SIZE = 32  # Reduced if memory is a concern
+    BATCH_SIZE = 100  # Reduced if memory is a concern
     GEN_SEQ_LEN = 1000
     LABEL_SMOOTHING = 0.3
     LEARNING_RATE = 3e-4  # Adjusted for quicker optimization with AdamW
-    PREDICT_LENGTH = 100
+    PREDICT_LENGTH = 10
     OUTPUT_FILENAME = "generated_song.mid"
     CHECKPOINT_DIR = "checkpoints"
     ONE_HOT = False
