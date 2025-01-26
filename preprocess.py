@@ -174,7 +174,7 @@ def preprocess_dataset(dataset_path, output_path, max_events=512, max_files=None
 def main():
     DATASET_PATH = "dataset/maestro-v3.0.0"
     OUTPUT_PATH = "dataset/preprocessed"
-    MAX_EVENTS = 1568
+    MAX_EVENTS = 768
     MAX_FILES = None
     
     preprocess_dataset(DATASET_PATH, OUTPUT_PATH, max_events=MAX_EVENTS, max_files=MAX_FILES)
