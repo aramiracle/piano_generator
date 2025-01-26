@@ -3,71 +3,64 @@ import torch
 import pickle
 import pretty_midi
 
-def create_midi_from_events(events, output_path="output.mid", tempo=120):
+def create_midi_from_events(events, output_path="output.mid", default_tempo=120):
     """
     Convert a sequence of MIDI events to a MIDI file.
-    
+
     :param events: List of MIDI events (e.g., note_on, note_off, time_shift, tempo changes).
     :param output_path: Path to save the generated MIDI file.
-    :param tempo: The tempo to apply to the MIDI file (in BPM).
+    :param default_tempo: The default tempo to apply to the MIDI file (in BPM).
     """
-    midi = pretty_midi.PrettyMIDI(initial_tempo=tempo)  # Set tempo
+    midi = pretty_midi.PrettyMIDI(initial_tempo=default_tempo)
     piano_program = pretty_midi.instrument_name_to_program("Acoustic Grand Piano")
     piano = pretty_midi.Instrument(program=piano_program)
 
-    # Constants for timing
-    BEAT_LENGTH = 0.5  # Length of a quarter note in seconds at 120 BPM
     current_time = 0
-    active_notes = {}  # Dictionary to keep track of active notes
+    active_notes = {}  # Dictionary to track active notes by pitch
 
     for event in events:
-        if event.startswith("note_on_"):
-            pitch = int(event.split("_")[2])
-            velocity = 64  # Medium velocity for more natural sound
-            active_notes[pitch] = {
-                'start': current_time,
-                'velocity': velocity
-            }
-            
-        elif event.startswith("note_off_"):
-            pitch = int(event.split("_")[2])
-            if pitch in active_notes:
-                # Create note with actual duration
-                note = pretty_midi.Note(
-                    velocity=active_notes[pitch]['velocity'],
-                    pitch=pitch,
-                    start=active_notes[pitch]['start'],
-                    end=current_time
-                )
-                piano.notes.append(note)
-                del active_notes[pitch]
-                
-        elif event.startswith("time_shift_"):
-            duration = int(event.split("_")[2])
-            # Convert duration to musical time
-            # duration 480 = quarter note, 240 = eighth note, etc.
-            time_shift = (duration / 480) * BEAT_LENGTH
-            current_time += time_shift
+        try:
+            if event.startswith("time_shift_"):
+                # Extract time shift duration and convert to seconds
+                duration = int(event.split("_")[2]) / 1000.0  # Convert milliseconds to seconds
+                current_time += duration
 
-        elif event.startswith("tempo_"):
-            # Adjust tempo based on the event (e.g., "tempo_100" for 100 BPM)
-            tempo = int(event.split("_")[1])
-            midi.get_end_time()  # Force tempo adjustment, even if not explicitly used
+            elif event.startswith("note_on_"):
+                # Extract pitch and create a new note
+                pitch = int(event.split("_")[2])
+                velocity = 100  # Default velocity
+                active_notes[pitch] = pretty_midi.Note(
+                    velocity=velocity, pitch=pitch, start=current_time, end=current_time + 0.5
+                )  # Default end time is 0.5 seconds after start
 
-    # Handle any notes that haven't received a note_off event
-    for pitch, note_data in active_notes.items():
-        note = pretty_midi.Note(
-            velocity=note_data['velocity'],
-            pitch=pitch,
-            start=note_data['start'],
-            end=current_time
-        )
+            elif event.startswith("note_off_"):
+                # Extract pitch and end the corresponding note
+                pitch = int(event.split("_")[2])
+                if pitch in active_notes:
+                    note = active_notes.pop(pitch)
+                    note.end = current_time  # Update the end time of the note
+                    piano.notes.append(note)
+
+            elif event.startswith("tempo_"):
+                # Adjust the tempo if a tempo change event occurs
+                new_tempo = int(event.split("_")[1])
+                midi.adjust_tempo(new_tempo, current_time)
+
+            else:
+                print(f"Unknown event: {event}")
+
+        except (ValueError, IndexError) as e:
+            print(f"Invalid event format: {event} ({e})")
+
+    # Handle any active notes without a note_off event
+    for note in active_notes.values():
+        note.end = current_time
         piano.notes.append(note)
 
-    # Add the piano instrument to the PrettyMIDI object
+    # Add the piano instrument to the MIDI object
     midi.instruments.append(piano)
 
-    # Write to a MIDI file
+    # Write to the output MIDI file
     midi.write(output_path)
     print(f"MIDI file created: {output_path}")
 
