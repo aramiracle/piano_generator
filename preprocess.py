@@ -103,7 +103,7 @@ def generate_midi_from_events(events, output_path):
             print(f"Unknown event: {event}")
 
     midi.instruments.append(instrument)
-    midi.write(output_path)
+    midi.write(str(output_path))  # Convert Path to string here
 
 def preprocess_dataset(dataset_path, output_path, max_events=512, max_files=None):
     """
