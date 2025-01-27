@@ -19,8 +19,8 @@ def main():
     FF_DIM = 128
     MAX_LEN = 64  # Adjusted based on typical sequence lengths
     DROPOUT = 0.2
-    EPOCHS = 50  # Increased for potentially better convergence
-    BATCH_SIZE = 256  # Reduced if memory is a concern
+    EPOCHS = 500  # Increased for potentially better convergence
+    BATCH_SIZE = 4096  # Reduced if memory is a concern
     GEN_SEQ_LEN = 200
     LABEL_SMOOTHING = 0.3
     LEARNING_RATE = 3e-4  # Adjusted for quicker optimization with AdamW
