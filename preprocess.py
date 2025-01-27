@@ -105,7 +105,7 @@ def generate_midi_from_events(events, output_path):
     midi.instruments.append(instrument)
     midi.write(str(output_path))  # Convert Path to string here
 
-def trim_midi_to_parts(midi_path, num_parts=20):
+def trim_midi_to_parts(midi_path, num_parts=20, max_events=512):
     """
     Trims a MIDI file into multiple parts and creates sequences from each part.
     """
@@ -132,7 +132,7 @@ def trim_midi_to_parts(midi_path, num_parts=20):
         temp_path = Path(f"temp_part_{i}.mid")
         part_midi.write(str(temp_path))
 
-        sequence = midi_to_event_sequence(temp_path)
+        sequence = midi_to_event_sequence(temp_path, max_events)
         sequences.append(sequence)
         temp_path.unlink()  # Remove temp file after processing
 
@@ -155,7 +155,7 @@ def preprocess_dataset(dataset_path, output_path, max_events=512, max_files=None
     for midi_file in tqdm(midi_files, desc="Processing MIDI files", unit="file"):
         try:
             # Split MIDI into parts and generate sequences
-            sequences = trim_midi_to_parts(midi_file, num_parts)
+            sequences = trim_midi_to_parts(midi_file, num_parts, max_events)
 
             for src_events in sequences:
                 # Simple transformation for target sequence (shift up by 1)
