@@ -13,15 +13,15 @@ def main():
     VOCAB_SIZE = load_vocab_size(SEQUENCES_PATH)
     
     # Updated Hyperparameters
-    EMBED_SIZE = 64
+    EMBED_SIZE = 32
     NUM_HEADS = 4
     NUM_LAYERS = 4
-    FF_DIM = 256
-    MAX_LEN = 768  # Adjusted based on typical sequence lengths
+    FF_DIM = 128
+    MAX_LEN = 64  # Adjusted based on typical sequence lengths
     DROPOUT = 0.2
     EPOCHS = 50  # Increased for potentially better convergence
-    BATCH_SIZE = 100  # Reduced if memory is a concern
-    GEN_SEQ_LEN = 1000
+    BATCH_SIZE = 256  # Reduced if memory is a concern
+    GEN_SEQ_LEN = 200
     LABEL_SMOOTHING = 0.3
     LEARNING_RATE = 3e-4  # Adjusted for quicker optimization with AdamW
     PREDICT_LENGTH = 10
