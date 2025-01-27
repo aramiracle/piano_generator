@@ -105,9 +105,43 @@ def generate_midi_from_events(events, output_path):
     midi.instruments.append(instrument)
     midi.write(str(output_path))  # Convert Path to string here
 
-def preprocess_dataset(dataset_path, output_path, max_events=512, max_files=None):
+def trim_midi_to_parts(midi_path, num_parts=20):
+    """
+    Trims a MIDI file into multiple parts and creates sequences from each part.
+    """
+    midi_data = pretty_midi.PrettyMIDI(str(midi_path))
+    total_time = midi_data.get_end_time()
+    part_duration = total_time / num_parts
+
+    sequences = []
+    for i in range(num_parts):
+        start_time = i * part_duration
+        end_time = (i + 1) * part_duration
+
+        part_notes = []
+        for instrument in midi_data.instruments:
+            for note in instrument.notes:
+                if start_time <= note.start < end_time:
+                    part_notes.append(note)
+
+        part_midi = pretty_midi.PrettyMIDI()
+        instrument = pretty_midi.Instrument(program=0)
+        instrument.notes = part_notes
+        part_midi.instruments.append(instrument)
+
+        temp_path = Path(f"temp_part_{i}.mid")
+        part_midi.write(str(temp_path))
+
+        sequence = midi_to_event_sequence(temp_path)
+        sequences.append(sequence)
+        temp_path.unlink()  # Remove temp file after processing
+
+    return sequences
+
+def preprocess_dataset(dataset_path, output_path, max_events=512, max_files=None, num_parts=20):
     """
     Preprocesses the Maestro dataset with reduced vocabulary size and handles note-on/off and time shift events.
+    Splits each MIDI file into multiple parts.
     """
     dataset_path = Path(dataset_path)
     output_path = Path(output_path)
@@ -120,23 +154,24 @@ def preprocess_dataset(dataset_path, output_path, max_events=512, max_files=None
     src_sequences, tgt_sequences = [], []
     for midi_file in tqdm(midi_files, desc="Processing MIDI files", unit="file"):
         try:
-            # Source sequence
-            src_events = midi_to_event_sequence(midi_file, max_events)
+            # Split MIDI into parts and generate sequences
+            sequences = trim_midi_to_parts(midi_file, num_parts)
 
-            # Simple transformation for target sequence (shift up by 1)
-            tgt_events = []
-            for event in src_events:
-                if event.startswith("note_on_"):
-                    pitch = int(event.split("_")[2])
-                    tgt_events.append(f"note_on_{(pitch + 1) % 88}")  # Wrap around within range
-                elif event.startswith("note_off_"):
-                    pitch = int(event.split("_")[2])
-                    tgt_events.append(f"note_off_{(pitch + 1) % 88}")  # Wrap around within range
-                else:
-                    tgt_events.append(event)
+            for src_events in sequences:
+                # Simple transformation for target sequence (shift up by 1)
+                tgt_events = []
+                for event in src_events:
+                    if event.startswith("note_on_"):
+                        pitch = int(event.split("_")[2])
+                        tgt_events.append(f"note_on_{(pitch + 1) % 88}")  # Wrap around within range
+                    elif event.startswith("note_off_"):
+                        pitch = int(event.split("_")[2])
+                        tgt_events.append(f"note_off_{(pitch + 1) % 88}")  # Wrap around within range
+                    else:
+                        tgt_events.append(event)
 
-            src_sequences.append(src_events)
-            tgt_sequences.append(tgt_events)
+                src_sequences.append(src_events)
+                tgt_sequences.append(tgt_events)
         except Exception as e:
             print(f"Error processing {midi_file}: {e}")
             continue
@@ -174,10 +209,11 @@ def preprocess_dataset(dataset_path, output_path, max_events=512, max_files=None
 def main():
     DATASET_PATH = "dataset/maestro-v3.0.0"
     OUTPUT_PATH = "dataset/preprocessed"
-    MAX_EVENTS = 768
+    MAX_EVENTS = 64
     MAX_FILES = None
+    NUM_PARTS = 20
     
-    preprocess_dataset(DATASET_PATH, OUTPUT_PATH, max_events=MAX_EVENTS, max_files=MAX_FILES)
+    preprocess_dataset(DATASET_PATH, OUTPUT_PATH, max_events=MAX_EVENTS, max_files=MAX_FILES, num_parts=NUM_PARTS)
 
 if __name__ == "__main__":
     main()
